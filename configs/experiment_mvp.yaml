@@ -1,0 +1,353 @@
+# MVP experiment configuration for Gate 1 data/feature closure.
+# This file intentionally locks the first-stage scope. Do not add model training
+# options here until the data/feature interface is stable.
+
+experiment:
+  name: fy_multisat_diffusion_mvp_gate1
+  stage: gate1_data_feature_closure
+  status: active
+  locked_on: "2026-05-27"
+  tianxing_role: not_in_first_stage_submission
+  scope_update_2026_06_01:
+    decision: "Multi-source Fengyun GEO+LEO is mandatory mainline; FY-4B AGRI/CLM alone is baseline only."
+    mandatory_main_condition: ["fy4b_agri_l1", "fy4b_clm", "fy3e_mwts_l1c", "fy3e_mwhs_l1c"]
+    first_pass_priority: "2024 warm season exact_6h_subset for Gate 1 sample closure and deterministic source-ablation readiness."
+    post_gate1_minimum_matrix: ["E0-RAW", "E1-B0-REG", "E2-B1-GEO", "E3-B2-MW", "E4-B3-MULTI"]
+    resource_gated_after_minimum_matrix: ["D4-B3-RESDIFF"]
+    diffusion_final_claim_policy:
+      required_for: "final generative/probabilistic claim"
+      start_condition: "only after stable E4 deterministic mean"
+      if_not_completed: "paper may report deterministic source-ablation only; no diffusion/probabilistic assimilation claim"
+      legacy_alias: "E5-B3-RESIDUAL-DIFF == D4-B3-RESDIFF"
+    do_not_block_mainline_with: ["GIIRS", "HIRAS", "RTTOV_CRTM", "WRF", "Hilbert_domain_diffusion", "raw_swath_cross_attention"]
+
+time:
+  start_date: "2024-03-05"
+  end_date: "2025-12-31"
+  analysis_hours_utc: [0, 6, 12, 18]
+  timestep_hours: 6
+  timezone: UTC
+
+domain:
+  training_buffer:
+    lon_min: 70.0
+    lon_max: 150.0
+    lat_min: 0.0
+    lat_max: 60.0
+  core_verification:
+    lon_min: 80.0
+    lon_max: 140.0
+    lat_min: 5.0
+    lat_max: 55.0
+  grid:
+    resolution_deg: 0.25
+    longitude_convention: "0_to_360"
+    latitude_order: "north_to_south_or_documented"
+
+background:
+  kind: short_range_forecast
+  source: era5_short_range_forecast
+  forecast_cycle_hours_utc: [6, 18]
+  forecast_lead_hours: [6, 12]
+  forecast_steps_hours: [6, 12]
+  valid_time: analysis_time
+  valid_time_mapping:
+    "00":
+      init_hour_utc: 18
+      init_day_offset: -1
+      step_hours: 6
+      lead_hours: 6
+      exact_6h_subset: true
+    "06":
+      init_hour_utc: 18
+      init_day_offset: -1
+      step_hours: 12
+      lead_hours: 12
+      exact_6h_subset: false
+    "12":
+      init_hour_utc: 6
+      init_day_offset: 0
+      step_hours: 6
+      lead_hours: 6
+      exact_6h_subset: true
+    "18":
+      init_hour_utc: 6
+      init_day_offset: 0
+      step_hours: 12
+      lead_hours: 12
+      exact_6h_subset: false
+  clean_subset:
+    name: exact_6h_subset
+    analysis_hours_utc: [0, 12]
+    forecast_lead_hours: [6]
+    scope_update_2026_06_01:
+      role: "first-pass 2024 warm-season subset for fastest defensible multi-source closure"
+      preferred_period:
+        start_date: "2024-05-01"
+        end_date: "2024-10-31"
+  audit_note_2026_05_27:
+    local_era_time_format_status: "contains ERA5 analysis-like files only; GRIB_dataType=an"
+    local_era_time_format_years: "2010-2024"
+    local_forecast_files_present: false
+    background_policy: "Use ERA5 short-range forecast with 6/12 h lead recorded; keep 00/12 UTC as exact 6 h clean subset."
+    era5_short_forecast_archive_note: "ERA5 short forecasts are commonly run from 06/18 UTC. For 00/06/12/18 valid times, use steps 6/12 and record lead_hours."
+    operational_ifs_hres_role: "not first-stage mainline"
+  allow_fallback_for_metrics: false
+  allowed_fallback_for_smoke_tests_only:
+    - gfs_forecast
+  forbidden_backgrounds_for_scientific_metrics:
+    - era5_analysis_time_shift
+    - non_forecast_background
+    - tianxing_without_audit
+    - long_lead_12h_24h_background_correction_as_mainline
+
+label:
+  source: era5_analysis
+  valid_time: analysis_time
+  target: analysis_increment
+  formula: "dx_label = era5_analysis(valid_time) - era5_short_range_forecast(init_time, step=6/12h, valid_time)"
+  truth_positioning: "supervisory_analysis_product_not_absolute_truth"
+
+variables:
+  pressure_levels_hpa: [1000, 925, 850, 700, 500, 300, 200]
+  upper_air:
+    z:
+      long_name: geopotential_or_geopotential_height
+      required: true
+    t:
+      long_name: temperature
+      required: true
+    u:
+      long_name: zonal_wind
+      required: true
+    v:
+      long_name: meridional_wind
+      required: true
+    q:
+      long_name: specific_humidity
+      units: "kg kg-1"
+      required: true
+      transform: standardized_increment
+      postcheck: non_negative_after_update
+  surface:
+    mslp:
+      required: true
+    t2m:
+      required: true
+    q2m:
+      required: true
+      transform: standardized_increment
+      postcheck: non_negative_after_update
+    u10:
+      required: true
+    v10:
+      required: true
+  auxiliary_surface:
+    d2m:
+      required: false
+      purpose: derive_q2m_or_rh2m_for_validation
+    rh2m:
+      required: false
+      purpose: validation_diagnostic
+
+satellites:
+  fy4b_agri_l1:
+    role: main_condition
+    formal_channel_selection_2026_06_02:
+      smoke_channels_used: [9, 10, 13]
+      mainline_channels: [9, 10, 11, 12, 13, 14, 15]
+      rationale: "Use the physically grouped AGRI WV/IR atmospheric channels for formal runs; smoke ch09/ch10/ch13 was only for path closure."
+      visible_near_ir_role: "daytime sensitivity only; not first-stage mainline because of diurnal/solar/surface-reflectance complications."
+    temporal_matching:
+      nearest_within_minutes: 30
+      current_gate1_policy: "analysis-time nearest whole-hour AGRI file; no AGRI +/-60 min temporal statistics in E0-E4 without supplementary neighboring-hour data"
+      stats_window_minutes: null
+    required_feature_fields:
+      - value_mean
+      - value_nearest
+      - value_std
+      - value_min
+      - value_max
+      - obs_count
+      - missing_mask
+      - qc_flag_raw
+      - qc_flag_ours
+      - time_offset_min
+      - satellite_zenith_or_scan_angle
+      - cloud_flag
+      - channel_id
+      - sensor_id
+      - aggregation_scale_km
+  fy4b_clm:
+    role: cloud_mask_and_stratification
+    temporal_matching:
+      nearest_within_minutes: 30
+      current_gate1_policy: "analysis-time nearest whole-hour CLM file; hourly +/-60 min CLM context is optional diagnostic only"
+      stats_window_minutes: null
+    required_feature_fields:
+      - cloud_fraction
+      - clear_fraction
+      - cloudy_fraction
+      - missing_mask
+      - time_offset_min
+      - qc_flag_raw
+      - qc_flag_ours
+      - aggregation_scale_km
+  fy3e_mwts_l1c:
+    role: main_condition
+    formal_channel_selection_2026_06_02:
+      mainline_channels: "ch01-ch17"
+      rationale: "Use the complete microwave temperature sounding channel set, then audit contribution and bias by channel."
+    temporal_matching:
+      primary_window_minutes: 90
+      sensitivity_window_minutes: 180
+    required_feature_fields:
+      - value_mean
+      - value_nearest
+      - value_std
+      - obs_count
+      - missing_mask
+      - qc_flag_raw
+      - qc_flag_ours
+      - time_offset_min
+      - scan_angle
+      - orbit_direction
+      - channel_id
+      - sensor_id
+      - aggregation_scale_km
+  fy3e_mwhs_l1c:
+    role: main_condition
+    formal_channel_selection_2026_06_02:
+      mainline_channels: "ch01-ch15"
+      rationale: "Use the complete microwave humidity sounding channel set, then audit contribution and bias by channel."
+    temporal_matching:
+      primary_window_minutes: 90
+      sensitivity_window_minutes: 180
+    required_feature_fields:
+      - value_mean
+      - value_nearest
+      - value_std
+      - obs_count
+      - missing_mask
+      - qc_flag_raw
+      - qc_flag_ours
+      - time_offset_min
+      - scan_angle
+      - orbit_direction
+      - channel_id
+      - sensor_id
+      - aggregation_scale_km
+  fy4b_giirs_avp:
+    role: optional_stage2_b3_enhancement_not_part_of_required_d4_resdiff_claim
+    enabled_in_gate1: false
+    temporal_matching:
+      window_minutes: 60
+  fy3e_hiras_l1c:
+    role: paused
+    enabled_in_gate1: false
+
+auxiliary_predictors:
+  static:
+    - static_landmask
+    - static_oceanmask
+    - static_surface_height_m
+    - static_elevation_m
+    - static_bathymetry_m
+    - static_topography_norm
+  leakage_policy:
+    static_auxiliary: "allowed as model input and land/sea diagnostic binning"
+    analysis_tcwv: "diagnostic only; do not use analysis-side tcwv as model condition"
+    xb_or_background_tpw_like: "allowed if derived from xb_q or forecast-side fields"
+  purpose: "bias_audit_and_debiasing; prevent learning instrument/diurnal/air-mass bias as real Δx"
+  solar:
+    - solar_elev
+    - solar_azim
+    - local_solar_time_hours
+    - hour_angle_deg
+  airmass:
+    - surface_skin_T
+    - tcwv
+    - thickness_1000_300
+    - thickness_200_50
+  qc:
+    - qc_flag_raw
+    - qc_flag_ours
+  aggregation:
+    - aggregation_scale_km
+
+splits:
+  dev_train:
+    start_date: "2024-03-05"
+    end_date: "2025-08-31"
+  dev_val:
+    start_date: "2025-09-01"
+    end_date: "2025-10-31"
+  dev_test:
+    start_date: "2025-11-01"
+    end_date: "2025-12-31"
+  event_holdout_test:
+    enabled: true
+    event_types: [extreme_rainfall, typhoon, heatwave, cold_surge]
+    exclusion_days:
+      extreme_rainfall: 3
+      typhoon: 3
+      heatwave: 7
+      cold_surge: 7
+  seasonal_test:
+    enabled: true
+    purpose: check_seasonal_generalization
+
+validation:
+  era5_metrics_are_development_only: true
+  independent_observation_required_for_main_claims: true
+  scope_update_2026_06_01:
+    source_ablation_required: true
+    main_result: "E4-B3-MULTI"
+    geo_only_is_baseline_not_claim: true
+    mw_only_required_for_complementarity: true
+    residual_diffusion_required_for_final_probabilistic_claim: true
+    residual_diffusion_resource_gated_after_e0_e4: true
+    residual_diffusion_legacy_alias: "E5-B3-RESIDUAL-DIFF == D4-B3-RESDIFF"
+  report_groups:
+    - all_short_range_leads
+    - lead_6h
+    - lead_12h
+    - exact_6h_subset_00_12utc
+  required_independent_observation_families:
+    - radiosonde
+    - surface_or_automatic_station
+    - precipitation_observation_or_merged_product
+  required_comparisons:
+    - "O-B = O - H(xb)"
+    - "O-A_model = O - H(xa_model)"
+    - "O-A_ERA5 = O - H(era5_analysis)"
+
+gate1_outputs:
+  required_files:
+    - configs/experiment_mvp.yaml
+    - docs/sample_schema.md
+    - docs/observation_validation_plan.md
+    - docs/extreme_events_protocol.md
+  required_tables:
+    - era5_forecast_analysis_inventory
+    - fy4b_agri_clm_file_index
+    - fy3e_mwts_mwhs_file_index
+    - matched_analysis_time_satellite_files
+  required_figures:
+    - xb_sample_fields
+    - dx_label_sample_fields
+    - agri_clm_sample_features
+    - mwts_mwhs_coverage
+    - missing_mask
+    - time_offset
+
+prohibited_in_gate1:
+  - train_b0_b1_b2_models
+  - add_tianxing_to_mainline
+  - run_wrf_cases
+  - claim_results
+  - use_non_forecast_background_for_scientific_metrics
+  - use_long_lead_12h_24h_background_correction_as_mainline
+  - make_agri_only_the_main_result
+  - start_residual_diffusion_before_e0_e4
+  - make_giirs_or_hiras_block_gate1

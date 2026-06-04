@@ -1,0 +1,54 @@
+# Local data and generated artifacts
+data/
+logs/
+tmp/
+secure/
+
+# Heavy scientific data formats
+*.grib
+*.grb
+*.grib2
+*.nc
+*.nc4
+*.zarr/
+*.h5
+*.hdf
+*.hdf5
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Local machine/path configuration
+configs/local_paths*.yaml
+configs/*secret*.yaml
+.env
+.env.*
+*.cdsapirc
+*.key
+*.pem
+
+# Local working notes and machine-specific operational records.
+docs/
+
+# One-off local orchestration scripts.
+tools/queue_era5_exact6h_cdsapi_pool_*.sh
+tools/run_*after_builder*.ps1
+
+# Python/cache/build noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

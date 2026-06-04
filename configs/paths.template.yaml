@@ -1,0 +1,15 @@
+# Copy to configs/local_paths.yaml and edit for the current machine.
+# configs/local_paths*.yaml is intentionally ignored by git.
+
+local_data_root: "${MULTISAT_LOCAL_DATA_ROOT}"
+local_archive_root: "${MULTISAT_LOCAL_ARCHIVE_ROOT}"
+
+project_smoke_data_policy:
+  allow_project_local_data_for_short_smoke: true
+  max_project_local_data_gb: 2
+  bulk_data_must_use_external_root: true
+
+server_paths:
+  workspace: "${MULTISAT_SERVER_WORKSPACE}"
+  fast_training_root: "${MULTISAT_FAST_TRAINING_ROOT}"
+  era5_analysis_root: "${MULTISAT_ERA5_ANALYSIS_ROOT}"
