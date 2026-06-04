@@ -260,6 +260,22 @@ def constant_grid(value: float, shape: tuple[int, int]) -> np.ndarray:
     return np.full(shape, value, dtype=np.float32)
 
 
+def has_readable_file(path: Path) -> bool:
+    return bool(str(path)) and path.is_file()
+
+
+def empty_stats(shape: tuple[int, int]) -> dict[str, np.ndarray]:
+    nan_grid = np.full(shape, np.nan, dtype=np.float32)
+    zero_grid = np.zeros(shape, dtype=np.float32)
+    return {
+        "mean": nan_grid,
+        "std": nan_grid.copy(),
+        "min": nan_grid.copy(),
+        "max": nan_grid.copy(),
+        "count": zero_grid,
+    }
+
+
 def add_identity_features(
     features: dict[str, np.ndarray],
     prefix: str,
@@ -450,10 +466,10 @@ def build_sample(args: argparse.Namespace) -> None:
     grid_index, shape = fy4b_grid_index(Path(args.cache_dir))
 
     match = row_for_analysis_time(indexes / "fy4b_agri_clm_matches.csv", analysis_time)
-    agri_path = Path(match["agri_path"])
-    clm_path = Path(match["clm_path"])
-    if not agri_path.exists() or not clm_path.exists():
-        raise FileNotFoundError("AGRI/CLM match paths are missing for the requested analysis time")
+    agri_path = Path(match.get("agri_path", ""))
+    clm_path = Path(match.get("clm_path", ""))
+    has_agri = has_readable_file(agri_path)
+    has_clm = has_readable_file(clm_path)
 
     features: dict[str, np.ndarray] = {}
     agri_offset_min = float(match.get("agri_offset_min") or 0.0)
@@ -461,9 +477,11 @@ def build_sample(args: argparse.Namespace) -> None:
     metadata: dict[str, object] = {
         "analysis_time_utc": format_time(analysis_time),
         "agri_path": str(agri_path),
+        "agri_path_available": has_agri,
         "agri_time_utc": match.get("agri_time_utc", ""),
         "agri_time_offset_min": agri_offset_min,
         "clm_path": str(clm_path),
+        "clm_path_available": has_clm,
         "clm_time_utc": match.get("clm_time_utc", ""),
         "clm_time_offset_min": clm_offset_min,
         "mwts_paths": [],
@@ -488,8 +506,11 @@ def build_sample(args: argparse.Namespace) -> None:
     features["fy4b_clm_time_offset_min"] = constant_grid(clm_offset_min, shape)
 
     for channel in args.agri_channels:
-        values = calibrated_agri_channel(agri_path, channel)
-        stats = stats_from_values(values, grid_index, shape)
+        if has_agri:
+            values = calibrated_agri_channel(agri_path, channel)
+            stats = stats_from_values(values, grid_index, shape)
+        else:
+            stats = empty_stats(shape)
         prefix = f"fy4b_agri_ch{channel:02d}"
         features[f"{prefix}_value_mean"] = stats["mean"]
         features[f"{prefix}_value_std"] = stats["std"]
@@ -499,14 +520,20 @@ def build_sample(args: argparse.Namespace) -> None:
         add_identity_features(features, prefix, shape, "fy4b_agri", channel)
         add_count_masks(features, prefix, stats["count"])
 
-    clm, dqf = read_clm(clm_path)
-    valid_clm = np.isin(clm, [0, 1, 2, 3]).astype(np.float32)
-    cloud = np.isin(clm, [0, 1]).astype(np.float32)
-    clear = np.isin(clm, [2, 3]).astype(np.float32)
-    valid_stats = stats_from_values(valid_clm, grid_index, shape)
-    cloud_stats = stats_from_values(np.where(valid_clm > 0, cloud, np.nan), grid_index, shape)
-    clear_stats = stats_from_values(np.where(valid_clm > 0, clear, np.nan), grid_index, shape)
-    dqf_stats = stats_from_values(dqf.astype(np.float32), grid_index, shape)
+    if has_clm:
+        clm, dqf = read_clm(clm_path)
+        valid_clm = np.isin(clm, [0, 1, 2, 3]).astype(np.float32)
+        cloud = np.isin(clm, [0, 1]).astype(np.float32)
+        clear = np.isin(clm, [2, 3]).astype(np.float32)
+        valid_stats = stats_from_values(valid_clm, grid_index, shape)
+        cloud_stats = stats_from_values(np.where(valid_clm > 0, cloud, np.nan), grid_index, shape)
+        clear_stats = stats_from_values(np.where(valid_clm > 0, clear, np.nan), grid_index, shape)
+        dqf_stats = stats_from_values(dqf.astype(np.float32), grid_index, shape)
+    else:
+        valid_stats = empty_stats(shape)
+        cloud_stats = empty_stats(shape)
+        clear_stats = empty_stats(shape)
+        dqf_stats = empty_stats(shape)
     features["fy4b_clm_obs_count"] = valid_stats["count"]
     features["fy4b_clm_channel_id"] = constant_grid(0.0, shape)
     add_count_masks(features, "fy4b_clm", valid_stats["count"])
