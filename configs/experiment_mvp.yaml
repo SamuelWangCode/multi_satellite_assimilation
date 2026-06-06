@@ -20,6 +20,36 @@ experiment:
       if_not_completed: "paper may report deterministic source-ablation only; no diffusion/probabilistic assimilation claim"
       legacy_alias: "E5-B3-RESIDUAL-DIFF == D4-B3-RESDIFF"
     do_not_block_mainline_with: ["GIIRS", "HIRAS", "RTTOV_CRTM", "WRF", "Hilbert_domain_diffusion", "raw_swath_cross_attention"]
+  formal_e0_e4_update_2026_06_06:
+    pilot_model_family: "BranchTinyConv is pipeline-only and must not be presented as the paper model."
+    formal_model_family: "branch_residual_unet_encoder_decoder"
+    formal_model_requirements:
+      - "background_static, GEO, MWTS, and MWHS use separate stems before fusion"
+      - "MWTS and MWHS remain separate stems in E3/E4"
+      - "each source stem compresses to a declared hidden width before fusion"
+      - "report parameter counts for E1-E4"
+      - "use fixed train/val/test split metadata"
+      - "compute normalization statistics from train samples only"
+      - "run at least 3 random seeds for learned E1-E4 in formal reports"
+      - "report per-variable and per-regime metrics"
+      - "run source-dropout diagnostics on trained E4"
+    formal_target_packages:
+      surface:
+        variables: ["dx_t2m", "dx_q2m", "dx_u10", "dx_v10", "dx_mslp"]
+        role: "architecture sanity and surface-impact diagnostic"
+      humidity_850:
+        variables: ["dx_t2m", "dx_q2m", "dx_u10", "dx_v10", "dx_mslp", "dx_q@1000", "dx_q@925", "dx_q@850", "dx_q@700", "dx_t@850", "dx_u@850", "dx_v@850"]
+        role: "minimum humidity/850-hPa physical target set before scientific claims"
+      full_3d:
+        variables: ["dx_t", "dx_q", "dx_u", "dx_v", "dx_z"]
+        levels_hpa: [1000, 925, 850, 700, 500, 300, 200]
+        role: "main pressure-level package when data volume and GPU budget allow"
+    formal_run_order:
+      - "May-Jul GPU architecture sanity after resume reaches a stable sample set"
+      - "2024-05..2024-10 warm-season deterministic E0-E4 once forecast files arrive"
+      - "D4-B3-RESDIFF only after E4 deterministic mean is stable or interpretable by regime"
+    source_dropout_eval: ["remove_geo", "remove_mwts", "remove_mwhs", "remove_mwts_mwhs"]
+    regime_metrics: ["land", "sea", "clear", "mixed", "cloudy", "mw_covered", "no_mw"]
 
 time:
   start_date: "2024-03-05"
